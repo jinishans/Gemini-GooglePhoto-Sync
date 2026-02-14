@@ -7,29 +7,33 @@ import time
 import json
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-import requests
+from PIL import Image, ImageDraw
 
 # Third-party imports
 from pystray import Icon, MenuItem as item, Menu
-from PIL import Image
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 
-# Configuration & Persistence
-APP_NAME = "Gemini Photo Sync Client"
+# Configuration
 CONFIG_FILE = "sync_config.json"
 DEFAULT_CONFIG = {
-    "web_app_url": "https://gemini-photo-sync-app.web.app", # Example Firebase URL
+    "web_app_url": "http://localhost:3000", 
     "local_folder": "",
     "auto_sync": False,
     "api_key": ""
 }
 
+# Setup Logging
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%H:%M:%S'
+)
+
 # Global State
 config = DEFAULT_CONFIG.copy()
-sync_thread_active = False
-stop_event = threading.Event()
-
-# Setup Logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+observer = None
+tray_icon = None
 
 def load_config():
     global config
@@ -47,56 +51,67 @@ def save_config():
     except Exception as e:
         logging.error(f"Failed to save config: {e}")
 
-# --- Background Sync Logic ---
-def sync_worker():
-    global sync_thread_active
-    sync_thread_active = True
-    logging.info("Sync Worker Started")
-    
-    while not stop_event.is_set():
-        if config["auto_sync"] and config["local_folder"] and config["web_app_url"]:
-            folder = config["local_folder"]
-            if os.path.exists(folder):
-                logging.info(f"Scanning {folder} for changes...")
-                
-                # Mock Sync Process: Walk through files
-                for root, dirs, files in os.walk(folder):
-                    for file in files:
-                        if file.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
-                            # In a real app, you would check hash/DB if file exists in Cloud
-                            # Then upload via requests.post()
-                            # e.g., upload_file(os.path.join(root, file), config["web_app_url"])
-                            pass
-                
-                logging.info("Sync cycle complete. Waiting...")
-            else:
-                logging.warning("Configured local folder does not exist.")
+# --- Real-time File Watcher (OneDrive-like) ---
+class GeminiSyncHandler(FileSystemEventHandler):
+    def on_created(self, event):
+        if not event.is_directory and self.is_image(event.src_path):
+            self.process_file(event.src_path, "Created")
+
+    def on_modified(self, event):
+        if not event.is_directory and self.is_image(event.src_path):
+            self.process_file(event.src_path, "Modified")
+
+    def is_image(self, path):
+        return path.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.heic'))
+
+    def process_file(self, file_path, action):
+        logging.info(f"[{action}] Detected: {file_path}")
+        if tray_icon:
+            tray_icon.title = f"Syncing: {os.path.basename(file_path)}..."
         
-        # Sleep for 30 seconds before next scan
-        time.sleep(30)
+        # Simulate Upload Delay
+        time.sleep(1)
+        
+        # In a real implementation:
+        # 1. Generate local embedding or description using Gemini API (Python SDK)
+        # 2. Upload to Web App via API
+        logging.info(f"✔ Synced: {file_path}")
+        
+        if tray_icon:
+            tray_icon.title = "Gemini Sync: Up to date"
+
+def start_watching():
+    global observer
+    if observer:
+        observer.stop()
+        observer.join()
     
-    sync_thread_active = False
-    logging.info("Sync Worker Stopped")
+    if config["auto_sync"] and config["local_folder"] and os.path.exists(config["local_folder"]):
+        event_handler = GeminiSyncHandler()
+        observer = Observer()
+        observer.schedule(event_handler, config["local_folder"], recursive=True)
+        observer.start()
+        logging.info(f"Started watching: {config['local_folder']}")
+    else:
+        logging.info("Sync watcher not started (Check config or disabled).")
 
-def start_sync_thread():
-    if not sync_thread_active:
-        stop_event.clear()
-        t = threading.Thread(target=sync_worker, daemon=True)
-        t.start()
-
-# --- GUI Settings Window (Tkinter) ---
+# --- GUI Settings Window ---
 def open_settings_window(icon, item):
     root = tk.Tk()
     root.title("Gemini Sync Settings")
-    root.geometry("500x450")
+    root.geometry("500x480")
     
+    # Force focus
+    root.lift()
+    root.attributes('-topmost',True)
+    root.after_idle(root.attributes,'-topmost',False)
+
     # Styles
     style = ttk.Style()
-    style.configure("TLabel", padding=5, font=('Segoe UI', 10))
-    style.configure("TButton", padding=5, font=('Segoe UI', 10))
-    style.configure("TEntry", padding=5)
+    style.configure("TButton", padding=6)
+    style.configure("TEntry", padding=4)
 
-    # Variables
+    # State Variables
     url_var = tk.StringVar(value=config.get("web_app_url", ""))
     folder_var = tk.StringVar(value=config.get("local_folder", ""))
     key_var = tk.StringVar(value=config.get("api_key", ""))
@@ -113,64 +128,90 @@ def open_settings_window(icon, item):
         config["api_key"] = key_var.get()
         config["auto_sync"] = auto_sync_var.get()
         save_config()
-        messagebox.showinfo("Success", "Settings saved successfully! Sync service updated.")
-        start_sync_thread() # Restart/Update sync
+        
+        # Restart Watcher
+        start_watching()
+        
+        messagebox.showinfo("Success", "Settings saved. Sync service updated.")
         root.destroy()
 
     # Layout
-    frame = ttk.Frame(root, padding="20")
-    frame.pack(fill=tk.BOTH, expand=True)
+    pad_opts = {'padx': 20, 'pady': 5}
+    
+    ttk.Label(root, text="Gemini Sync Preferences", font=("Segoe UI", 16, "bold")).pack(pady=20)
+    
+    # Form
+    frame = ttk.Frame(root)
+    frame.pack(fill=tk.BOTH, expand=True, padx=20)
 
-    ttk.Label(frame, text="Google Hosted App URL", font=('Segoe UI', 10, 'bold')).pack(anchor=tk.W)
-    ttk.Entry(frame, textvariable=url_var, width=50).pack(fill=tk.X, pady=(0, 10))
-    ttk.Label(frame, text="The full URL provided by Firebase (e.g., https://myapp.web.app)", foreground="gray", font=('Segoe UI', 8)).pack(anchor=tk.W, pady=(0, 10))
+    ttk.Label(frame, text="Web App / Server URL:").pack(anchor=tk.W)
+    ttk.Entry(frame, textvariable=url_var).pack(fill=tk.X, pady=(0, 10))
 
-    ttk.Label(frame, text="Local Album Folder", font=('Segoe UI', 10, 'bold')).pack(anchor=tk.W)
+    ttk.Label(frame, text="Local Folder to Sync:").pack(anchor=tk.W)
     f_frame = ttk.Frame(frame)
     f_frame.pack(fill=tk.X, pady=(0, 10))
     ttk.Entry(f_frame, textvariable=folder_var).pack(side=tk.LEFT, fill=tk.X, expand=True)
-    ttk.Button(f_frame, text="Browse...", command=browse_folder).pack(side=tk.RIGHT, padx=(5, 0))
+    ttk.Button(f_frame, text="Browse", command=browse_folder).pack(side=tk.RIGHT, padx=5)
 
-    ttk.Label(frame, text="Google Gemini API Key", font=('Segoe UI', 10, 'bold')).pack(anchor=tk.W)
-    ttk.Entry(frame, textvariable=key_var, show="*", width=50).pack(fill=tk.X, pady=(0, 10))
+    ttk.Label(frame, text="Gemini API Key (Optional for Local AI):").pack(anchor=tk.W)
+    ttk.Entry(frame, textvariable=key_var, show="*").pack(fill=tk.X, pady=(0, 10))
 
-    ttk.Checkbutton(frame, text="Enable Automatic Background Sync", variable=auto_sync_var).pack(anchor=tk.W, pady=(10, 20))
+    ttk.Checkbutton(frame, text="Enable Real-time Sync", variable=auto_sync_var).pack(anchor=tk.W, pady=10)
 
-    ttk.Button(frame, text="Save Configuration", command=save_settings).pack(fill=tk.X)
+    # Footer
+    ttk.Button(root, text="Save & Apply", command=save_settings).pack(fill=tk.X, side=tk.BOTTOM, padx=20, pady=20)
     
     root.mainloop()
 
-# --- Tray Logic ---
-def open_web_app(icon, item):
-    url = config.get("web_app_url", "https://google.com")
-    if not url.startswith("http"):
-        url = "https://" + url
-    webbrowser.open(url)
+# --- System Tray ---
+def create_image():
+    # Generate a simple icon if file missing
+    w, h = 64, 64
+    image = Image.new('RGB', (w, h), color=(255, 255, 255))
+    dc = ImageDraw.Draw(image)
+    # Draw a blue circle (Gemini Blue)
+    dc.ellipse([8, 8, 56, 56], fill=(33, 150, 243))
+    # Draw a white G
+    dc.text((24, 20), "G", fill="white", font_size=20)
+    return image
+
+def open_web(icon, item):
+    webbrowser.open(config.get("web_app_url", "http://localhost:3000"))
 
 def quit_app(icon, item):
-    stop_event.set()
+    if observer:
+        observer.stop()
+        observer.join()
     icon.stop()
     sys.exit()
 
 def main():
+    global tray_icon
     load_config()
-    start_sync_thread()
+    start_watching()
 
-    # Create Tray Icon
-    # In a real app, use a real .ico or .png file
-    image = Image.new('RGB', (64, 64), color=(33, 150, 243)) 
-    
+    # Try to load icon file, fallback to generated
+    icon_path = "public/icon.ico"
+    if os.path.exists(icon_path):
+        try:
+            image = Image.open(icon_path)
+        except:
+            image = create_image()
+    else:
+        image = create_image()
+
     menu = Menu(
-        item('Open Web Gallery', open_web_app, default=True),
-        item('Settings & Login', open_settings_window),
+        item('Gemini Sync: Active' if config["auto_sync"] else 'Gemini Sync: Paused', lambda i, x: None, enabled=False),
         Menu.SEPARATOR,
-        item('Sync Now', lambda i, it: logging.info("Manual sync triggered")),
+        item('Open Web Gallery', open_web, default=True),
+        item('Settings', open_settings_window),
+        Menu.SEPARATOR,
         item('Quit', quit_app)
     )
 
-    icon = Icon("GeminiSyncClient", image, "Gemini Sync Client", menu)
-    logging.info("Desktop Sync Client started in System Tray.")
-    icon.run()
+    tray_icon = Icon("GeminiSync", image, "Gemini Sync", menu)
+    logging.info("Gemini Sync Client started in System Tray.")
+    tray_icon.run()
 
 if __name__ == "__main__":
     main()

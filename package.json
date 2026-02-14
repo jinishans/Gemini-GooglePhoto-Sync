@@ -1,6 +1,6 @@
 {
   "name": "gemini-smart-photo-sync",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "AI-Powered Photo Sync & Gallery",
   "main": "electron/main.js",
   "author": "Your Name",
