@@ -1,60 +1,80 @@
-# Gemini Smart Photo Sync (Cloud Edition)
+# Gemini Smart Photo Sync
 
-A dual-architecture photo management solution:
-1.  **Web App (Hosted on Firebase)**: View, search, and share albums publicly without exposing direct Google Photos links.
-2.  **Desktop Tray Client (Python)**: Syncs local photos and Google Photos content to the Cloud Web App securely.
+A smart, AI-powered photo organization and gallery tool. You can run this application in two ways:
+1.  **Fully Local**: Everything runs on your computer.
+2.  **Cloud Hosted**: The web app lives on the internet (Firebase), and a small tray utility on your computer syncs your photos to it.
 
-## 🚀 Deployment & Usage
+---
 
-### 1. Deploy Web App to Firebase
-First, build the React application and deploy it to Firebase Hosting.
+## 🛠️ Common Prerequisites
 
-```bash
-# Install dependencies
-npm install
+Before choosing an option, you must build the web application code.
 
-# Build the React App
-npm run build
+1.  **Install Node.js** (for building the web app).
+2.  **Install Python 3.x** (for running the desktop utility).
+3.  **Setup Environment**:
+    Create a `.env` file in the root directory:
+    ```
+    REACT_APP_API_KEY=your_google_genai_api_key
+    ```
+4.  **Build the App**:
+    ```bash
+    npm install
+    npm run build
+    ```
+5.  **Install Python Libraries**:
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-# Install Firebase Tools (if not already installed)
-npm install -g firebase-tools
+---
 
-# Login to Google
-firebase login
+## 🏠 Option 1: Fully Local Setup
+*Best for privacy and offline usage. The app runs entirely on your machine.*
 
-# Initialize Project (select Hosting)
-firebase init
+1.  **Run the Local Host Script**:
+    ```bash
+    python run_local_host.py
+    ```
+2.  **Usage**:
+    *   A **Green Icon** will appear in your system tray.
+    *   Your browser will automatically open `http://localhost:3000`.
+    *   The app serves the files directly from your computer.
 
-# Deploy
-firebase deploy
-```
-*Note the Hosting URL provided by Firebase (e.g., `https://your-project.web.app`).*
+---
 
-### 2. Setup Desktop Sync Client
-The Python script runs on your computer to handle the actual file synchronization.
+## ☁️ Option 2: Cloud Hosted + Sync Client
+*Best for sharing links with others and accessing your gallery from anywhere.*
 
-```bash
-# Install Python dependencies
-pip install -r requirements.txt
+### Step A: Deploy the Web App
+1.  Install Firebase tools: `npm install -g firebase-tools`
+2.  Login: `firebase login`
+3.  Initialize: `firebase init` (Select **Hosting**, use `build` as the public directory, answer **Yes** to "Configure as single-page app").
+4.  Deploy:
+    ```bash
+    firebase deploy
+    ```
+5.  **Copy the Hosting URL** provided (e.g., `https://your-project.web.app`).
 
-# Run the Tray App
-python run_app.py
-```
+### Step B: Run the Client Sync App
+1.  Run the Cloud Sync Script on your computer:
+    ```bash
+    python run_cloud_sync.py
+    ```
+2.  **Configure**:
+    *   Right-click the **Blue Icon** in your system tray.
+    *   Select **Settings & Sync**.
+    *   Paste your **Firebase App URL** from Step A.
+    *   Select your local photos folder.
+    *   Click **Save & Connect**.
+3.  **Usage**:
+    *   The Python script runs in the background uploading/syncing metadata to your Cloud App.
+    *   You can visit your Firebase URL from any device to see your gallery.
 
-### 3. Configure Sync
-1.  Right-click the **Tray Icon**.
-2.  Select **Settings & Login**.
-3.  Enter the **Firebase App URL** from Step 1.
-4.  Select the **Local Folder** you want to sync.
-5.  Click **Save Configuration**.
+---
 
-## Features
+## 🔑 Features
 
-*   **Public Link Sharing**: Host your own gallery on Firebase. Share links to albums that are viewable by anyone, independent of your Google Photos privacy settings.
-*   **Desktop Sync**: Automatically pushes local files to the cloud app.
-*   **Gemini AI Search**: Uses Google Gemini to analyze and search photos semantically.
-
-## Architecture
-
-*   **Frontend**: React + Tailwind + Lucide Icons (Hosted on Firebase).
-*   **Backend/Sync**: Python `pystray` + `requests` (Running locally on Desktop).
+*   **Smart Upload**: Drag & drop photos to auto-tag using Gemini Vision.
+*   **Vector Search**: Semantic search for your photos ("dog on the beach").
+*   **Tray Integration**: Runs in the background with auto-start capabilities.
