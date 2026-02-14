@@ -22,6 +22,12 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ existingUsers, onLogin
       return;
     }
 
+    // Common Mistake Check: API Key vs Client ID
+    if (GOOGLE_CLIENT_ID.startsWith('AIza')) {
+      setError("Configuration Error: You provided a Google API Key (starts with 'AIza'), but an OAuth 2.0 Client ID is required. It usually ends with '.apps.googleusercontent.com'. Check your Google Cloud Credentials.");
+      return;
+    }
+
     // Initialize the Google SDK with a callback to handle successful login
     const checkGoogle = setInterval(() => {
       if (window.google) {
