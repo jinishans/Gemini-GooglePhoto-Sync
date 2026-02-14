@@ -2,12 +2,12 @@
   "appId": "com.gemini.photosync",
   "productName": "Gemini Smart Photo Sync",
   "files": [
-    "build/**/*",
+    "dist/**/*",
     "electron/**/*"
   ],
   "directories": {
     "buildResources": "assets",
-    "output": "dist"
+    "output": "release"
   },
   "win": {
     "target": [

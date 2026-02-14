@@ -3,8 +3,8 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve static files from the React build folder
-const buildPath = path.join(__dirname, '../build');
+// Serve static files from the React dist folder
+const buildPath = path.join(__dirname, '../dist');
 app.use(express.static(buildPath));
 
 // API Endpoint Placeholder for Service Health

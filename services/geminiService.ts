@@ -12,7 +12,7 @@ export const analyzeImage = async (base64Data: string, mimeType: string) => {
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-3-flash-preview',
       contents: {
         parts: [
           {

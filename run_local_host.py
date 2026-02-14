@@ -14,7 +14,7 @@ from PIL import Image
 PORT = 3000
 APP_NAME = "Gemini Photo Sync (Local)"
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-BUILD_DIR = os.path.join(ROOT_DIR, 'build')
+BUILD_DIR = os.path.join(ROOT_DIR, 'dist')
 ICON_PATH = os.path.join(ROOT_DIR, 'public', 'favicon.ico')
 
 # Setup Logging
