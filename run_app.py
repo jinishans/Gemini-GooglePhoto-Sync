@@ -4,126 +4,172 @@ import threading
 import webbrowser
 import logging
 import time
-from http.server import SimpleHTTPRequestHandler, HTTPServer
-from socketserver import ThreadingMixIn
-import winreg
+import json
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
+import requests
 
-# Third-party imports (install via pip install -r requirements.txt)
+# Third-party imports
 from pystray import Icon, MenuItem as item, Menu
 from PIL import Image
 
-# Configuration
-PORT = 3000
-APP_NAME = "Gemini Photo Sync"
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-BUILD_DIR = os.path.join(ROOT_DIR, 'build')
-ICON_PATH = os.path.join(ROOT_DIR, 'public', 'favicon.ico') # Fallback icon
+# Configuration & Persistence
+APP_NAME = "Gemini Photo Sync Client"
+CONFIG_FILE = "sync_config.json"
+DEFAULT_CONFIG = {
+    "web_app_url": "https://gemini-photo-sync-app.web.app", # Example Firebase URL
+    "local_folder": "",
+    "auto_sync": False,
+    "api_key": ""
+}
+
+# Global State
+config = DEFAULT_CONFIG.copy()
+sync_thread_active = False
+stop_event = threading.Event()
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
-    """Handle requests in a separate thread."""
-    daemon_threads = True
+def load_config():
+    global config
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+        except Exception as e:
+            logging.error(f"Failed to load config: {e}")
 
-class ReactHandler(SimpleHTTPRequestHandler):
-    """Serves the React Build directory."""
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=BUILD_DIR, **kwargs)
-
-    def log_message(self, format, *args):
-        # Suppress generic HTTP logs to keep console clean
-        pass
-
-    def do_GET(self):
-        # Handle SPA routing: if file doesn't exist, serve index.html
-        path = self.translate_path(self.path)
-        if not os.path.exists(path) or os.path.isdir(path):
-            self.path = '/index.html'
-        super().do_GET()
-
-def start_server():
-    """Starts the web server."""
-    if not os.path.exists(BUILD_DIR):
-        print(f"Error: Build directory not found at {BUILD_DIR}")
-        print("Please run 'npm run build' first.")
-        return
-
-    server = ThreadingHTTPServer(('localhost', PORT), ReactHandler)
-    logging.info(f"Serving React app at http://localhost:{PORT}")
-    server.serve_forever()
-
-def open_browser(icon, item):
-    """Opens the app in the default browser."""
-    webbrowser.open(f'http://localhost:{PORT}')
-
-def set_autostart(enable=True):
-    """Adds or removes the app from Windows Startup Registry."""
-    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+def save_config():
     try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)
-        # Use pythonw.exe to run without console window if possible, or python.exe
-        python_exe = sys.executable.replace("python.exe", "pythonw.exe") if "python.exe" in sys.executable else sys.executable
-        script_path = os.path.abspath(__file__)
-        cmd = f'"{python_exe}" "{script_path}"'
-
-        if enable:
-            winreg.SetValueEx(key, "GeminiPhotoSync", 0, winreg.REG_SZ, cmd)
-            logging.info("Added to Windows Startup")
-        else:
-            try:
-                winreg.DeleteValue(key, "GeminiPhotoSync")
-                logging.info("Removed from Windows Startup")
-            except FileNotFoundError:
-                pass
-        winreg.CloseKey(key)
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f, indent=4)
     except Exception as e:
-        logging.error(f"Failed to modify registry: {e}")
+        logging.error(f"Failed to save config: {e}")
 
-def toggle_autostart(icon, item):
-    """Toggles the checked state of auto-start."""
-    current_state = item.checked
-    set_autostart(not current_state)
+# --- Background Sync Logic ---
+def sync_worker():
+    global sync_thread_active
+    sync_thread_active = True
+    logging.info("Sync Worker Started")
+    
+    while not stop_event.is_set():
+        if config["auto_sync"] and config["local_folder"] and config["web_app_url"]:
+            folder = config["local_folder"]
+            if os.path.exists(folder):
+                logging.info(f"Scanning {folder} for changes...")
+                
+                # Mock Sync Process: Walk through files
+                for root, dirs, files in os.walk(folder):
+                    for file in files:
+                        if file.lower().endswith(('.png', '.jpg', '.jpeg', '.webp')):
+                            # In a real app, you would check hash/DB if file exists in Cloud
+                            # Then upload via requests.post()
+                            # e.g., upload_file(os.path.join(root, file), config["web_app_url"])
+                            pass
+                
+                logging.info("Sync cycle complete. Waiting...")
+            else:
+                logging.warning("Configured local folder does not exist.")
+        
+        # Sleep for 30 seconds before next scan
+        time.sleep(30)
+    
+    sync_thread_active = False
+    logging.info("Sync Worker Stopped")
 
-def is_autostart_enabled(item):
-    """Checks if registry key exists to update menu checkbox."""
-    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-    try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_READ)
-        winreg.QueryValueEx(key, "GeminiPhotoSync")
-        winreg.CloseKey(key)
-        return True
-    except FileNotFoundError:
-        return False
-    except Exception:
-        return False
+def start_sync_thread():
+    if not sync_thread_active:
+        stop_event.clear()
+        t = threading.Thread(target=sync_worker, daemon=True)
+        t.start()
+
+# --- GUI Settings Window (Tkinter) ---
+def open_settings_window(icon, item):
+    root = tk.Tk()
+    root.title("Gemini Sync Settings")
+    root.geometry("500x450")
+    
+    # Styles
+    style = ttk.Style()
+    style.configure("TLabel", padding=5, font=('Segoe UI', 10))
+    style.configure("TButton", padding=5, font=('Segoe UI', 10))
+    style.configure("TEntry", padding=5)
+
+    # Variables
+    url_var = tk.StringVar(value=config.get("web_app_url", ""))
+    folder_var = tk.StringVar(value=config.get("local_folder", ""))
+    key_var = tk.StringVar(value=config.get("api_key", ""))
+    auto_sync_var = tk.BooleanVar(value=config.get("auto_sync", False))
+
+    def browse_folder():
+        folder_selected = filedialog.askdirectory()
+        if folder_selected:
+            folder_var.set(folder_selected)
+
+    def save_settings():
+        config["web_app_url"] = url_var.get()
+        config["local_folder"] = folder_var.get()
+        config["api_key"] = key_var.get()
+        config["auto_sync"] = auto_sync_var.get()
+        save_config()
+        messagebox.showinfo("Success", "Settings saved successfully! Sync service updated.")
+        start_sync_thread() # Restart/Update sync
+        root.destroy()
+
+    # Layout
+    frame = ttk.Frame(root, padding="20")
+    frame.pack(fill=tk.BOTH, expand=True)
+
+    ttk.Label(frame, text="Google Hosted App URL", font=('Segoe UI', 10, 'bold')).pack(anchor=tk.W)
+    ttk.Entry(frame, textvariable=url_var, width=50).pack(fill=tk.X, pady=(0, 10))
+    ttk.Label(frame, text="The full URL provided by Firebase (e.g., https://myapp.web.app)", foreground="gray", font=('Segoe UI', 8)).pack(anchor=tk.W, pady=(0, 10))
+
+    ttk.Label(frame, text="Local Album Folder", font=('Segoe UI', 10, 'bold')).pack(anchor=tk.W)
+    f_frame = ttk.Frame(frame)
+    f_frame.pack(fill=tk.X, pady=(0, 10))
+    ttk.Entry(f_frame, textvariable=folder_var).pack(side=tk.LEFT, fill=tk.X, expand=True)
+    ttk.Button(f_frame, text="Browse...", command=browse_folder).pack(side=tk.RIGHT, padx=(5, 0))
+
+    ttk.Label(frame, text="Google Gemini API Key", font=('Segoe UI', 10, 'bold')).pack(anchor=tk.W)
+    ttk.Entry(frame, textvariable=key_var, show="*", width=50).pack(fill=tk.X, pady=(0, 10))
+
+    ttk.Checkbutton(frame, text="Enable Automatic Background Sync", variable=auto_sync_var).pack(anchor=tk.W, pady=(10, 20))
+
+    ttk.Button(frame, text="Save Configuration", command=save_settings).pack(fill=tk.X)
+    
+    root.mainloop()
+
+# --- Tray Logic ---
+def open_web_app(icon, item):
+    url = config.get("web_app_url", "https://google.com")
+    if not url.startswith("http"):
+        url = "https://" + url
+    webbrowser.open(url)
 
 def quit_app(icon, item):
-    """Stops the app."""
+    stop_event.set()
     icon.stop()
-    os._exit(0)
+    sys.exit()
 
 def main():
-    # 1. Start Web Server in Background Thread
-    server_thread = threading.Thread(target=start_server, daemon=True)
-    server_thread.start()
+    load_config()
+    start_sync_thread()
 
-    # 2. Prepare Tray Icon
-    image = Image.open(ICON_PATH) if os.path.exists(ICON_PATH) else Image.new('RGB', (64, 64), color='blue')
+    # Create Tray Icon
+    # In a real app, use a real .ico or .png file
+    image = Image.new('RGB', (64, 64), color=(33, 150, 243)) 
     
     menu = Menu(
-        item('Open Dashboard', open_browser, default=True),
-        item('Run on Startup', toggle_autostart, checked=is_autostart_enabled),
+        item('Open Web Gallery', open_web_app, default=True),
+        item('Settings & Login', open_settings_window),
         Menu.SEPARATOR,
+        item('Sync Now', lambda i, it: logging.info("Manual sync triggered")),
         item('Quit', quit_app)
     )
 
-    icon = Icon("GeminiPhotoSync", image, "Gemini Photo Sync", menu)
-
-    # 3. Open browser immediately on first run
-    threading.Timer(1.0, lambda: webbrowser.open(f'http://localhost:{PORT}')).start()
-    
-    logging.info("System Tray started.")
+    icon = Icon("GeminiSyncClient", image, "Gemini Sync Client", menu)
+    logging.info("Desktop Sync Client started in System Tray.")
     icon.run()
 
 if __name__ == "__main__":

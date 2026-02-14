@@ -1,55 +1,60 @@
-# Gemini Smart Photo Sync
+# Gemini Smart Photo Sync (Cloud Edition)
 
-A smart, AI-powered photo organization and gallery tool that works with Google Photos and local storage.
+A dual-architecture photo management solution:
+1.  **Web App (Hosted on Firebase)**: View, search, and share albums publicly without exposing direct Google Photos links.
+2.  **Desktop Tray Client (Python)**: Syncs local photos and Google Photos content to the Cloud Web App securely.
 
-## Prerequisites
+## 🚀 Deployment & Usage
 
-1.  **Node.js**: Installed to build the React application.
-2.  **Python 3.x**: Installed to run the desktop tray utility.
-
-## 🚀 Installation & Running
-
-### 1. Build the Application
-First, compile the React application into static files.
+### 1. Deploy Web App to Firebase
+First, build the React application and deploy it to Firebase Hosting.
 
 ```bash
+# Install dependencies
 npm install
+
+# Build the React App
 npm run build
-```
 
-### 2. Install Python Dependencies
-Install the required libraries for the system tray icon and server.
+# Install Firebase Tools (if not already installed)
+npm install -g firebase-tools
+
+# Login to Google
+firebase login
+
+# Initialize Project (select Hosting)
+firebase init
+
+# Deploy
+firebase deploy
+```
+*Note the Hosting URL provided by Firebase (e.g., `https://your-project.web.app`).*
+
+### 2. Setup Desktop Sync Client
+The Python script runs on your computer to handle the actual file synchronization.
 
 ```bash
+# Install Python dependencies
 pip install -r requirements.txt
-```
 
-### 3. Run the Desktop Utility
-Run the Python script. This will start the local web server and place an icon in your system tray.
-
-```bash
-# Run normally (keeps console open)
+# Run the Tray App
 python run_app.py
-
-# OR Run silently (background)
-pythonw run_app.py
 ```
 
-*   **Open Dashboard**: Double-click the tray icon or select "Open Dashboard".
-*   **Auto-Start**: Right-click the tray icon and check "Run on Startup" to have it start with Windows automatically.
-
-## 🔑 API Key Configuration
-
-The application requires a Google GenAI API Key.
-Make sure you have a `.env` file in the root directory before running `npm run build`:
-
-```
-REACT_APP_API_KEY=your_actual_api_key_here
-```
-*(Note: Since this is a client-side build, the key is embedded during the build process)*.
+### 3. Configure Sync
+1.  Right-click the **Tray Icon**.
+2.  Select **Settings & Login**.
+3.  Enter the **Firebase App URL** from Step 1.
+4.  Select the **Local Folder** you want to sync.
+5.  Click **Save Configuration**.
 
 ## Features
 
-*   **Smart Upload**: Drag & drop photos to auto-tag using Gemini Vision.
-*   **Vector Search**: Semantic search for your photos ("dog on the beach").
-*   **Tray Integration**: Runs in the background, capable of auto-starting.
+*   **Public Link Sharing**: Host your own gallery on Firebase. Share links to albums that are viewable by anyone, independent of your Google Photos privacy settings.
+*   **Desktop Sync**: Automatically pushes local files to the cloud app.
+*   **Gemini AI Search**: Uses Google Gemini to analyze and search photos semantically.
+
+## Architecture
+
+*   **Frontend**: React + Tailwind + Lucide Icons (Hosted on Firebase).
+*   **Backend/Sync**: Python `pystray` + `requests` (Running locally on Desktop).
