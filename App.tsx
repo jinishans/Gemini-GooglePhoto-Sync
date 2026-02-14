@@ -150,6 +150,28 @@ const App: React.FC = () => {
 
   // --- Core Sync Logic (Depends on photos state) ---
 
+  // Listen for Tray Events (Electron IPC)
+  useEffect(() => {
+    if ((window as any).require) {
+      try {
+        const { ipcRenderer } = (window as any).require('electron');
+        const handleSyncTrigger = () => {
+          console.log("Tray requested sync");
+          if (currentUser) {
+             setSyncStatus(prev => ({ ...prev, isSyncing: true }));
+          }
+        };
+
+        ipcRenderer.on('trigger-sync', handleSyncTrigger);
+        return () => {
+          ipcRenderer.removeListener('trigger-sync', handleSyncTrigger);
+        };
+      } catch (e) {
+        console.warn("Electron IPC not available");
+      }
+    }
+  }, [currentUser]);
+
   // Vector Indexing Effect
   useEffect(() => {
     const unindexedPhotos = photos.filter(p => !p.embedding);
@@ -498,7 +520,7 @@ const App: React.FC = () => {
         {/* User Profile Section */}
         <div className="p-4 border-t border-slate-100 dark:border-slate-800 shrink-0">
            <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-3 flex items-center gap-3 relative group">
-              <img src={currentUser.avatarUrl} alt="User" className="w-10 h-10 rounded-full bg-slate-200" />
+              <img src={currentUser.avatarUrl} alt={UserIcon.name} className="w-10 h-10 rounded-full bg-slate-200" />
               <div className="flex-1 min-w-0">
                  <p className="text-sm font-semibold truncate">{currentUser.name}</p>
                  <p className="text-xs text-slate-500 truncate">{currentUser.email}</p>
