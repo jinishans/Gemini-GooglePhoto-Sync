@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
-import { performGoogleLogin } from '../services/authService';
+import React, { useEffect, useState } from 'react';
+import { initializeGoogleAuth, performGoogleLogin } from '../services/authService';
 import { User } from '../types';
-import { Loader2, Plus, User as UserIcon, LogIn, ArrowRight } from 'lucide-react';
+import { Loader2, Plus, ArrowRight, AlertTriangle } from 'lucide-react';
 
 interface LoginScreenProps {
   existingUsers: User[];
@@ -11,17 +11,38 @@ interface LoginScreenProps {
 
 export const LoginScreen: React.FC<LoginScreenProps> = ({ existingUsers, onLoginSuccess, onSelectUser }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    try {
-      const user = await performGoogleLogin();
-      onLoginSuccess(user);
-    } catch (error) {
-      console.error("Login failed", error);
-    } finally {
-      setIsLoading(false);
+  // Load Client ID from Env
+  const GOOGLE_CLIENT_ID = process.env.REACT_APP_GOOGLE_CLIENT_ID || '';
+
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID) {
+      setError("Missing REACT_APP_GOOGLE_CLIENT_ID in .env file.");
+      return;
     }
+
+    // Initialize the Google SDK with a callback to handle successful login
+    const checkGoogle = setInterval(() => {
+      if (window.google) {
+        initializeGoogleAuth(GOOGLE_CLIENT_ID, (user) => {
+            setIsLoading(false);
+            onLoginSuccess(user);
+        });
+        clearInterval(checkGoogle);
+      }
+    }, 500);
+
+    return () => clearInterval(checkGoogle);
+  }, [GOOGLE_CLIENT_ID, onLoginSuccess]);
+
+  const handleLoginClick = () => {
+    if (!GOOGLE_CLIENT_ID) {
+      alert("Please configure REACT_APP_GOOGLE_CLIENT_ID in .env");
+      return;
+    }
+    setIsLoading(true);
+    performGoogleLogin();
   };
 
   return (
@@ -33,21 +54,28 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ existingUsers, onLogin
              <ArrowRight size={32} className="text-white/90" />
            </div>
            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Gemini PhotoSync</h1>
-           <p className="text-slate-500 dark:text-slate-400 mt-2">AI-Powered Local & Cloud Gallery Management</p>
+           <p className="text-slate-500 dark:text-slate-400 mt-2">AI-Powered Cloud Gallery</p>
         </div>
+
+        {error && (
+            <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3 text-amber-800 text-sm">
+                <AlertTriangle className="shrink-0" size={18} />
+                <div>
+                    <p className="font-bold">Configuration Error</p>
+                    <p>{error}</p>
+                </div>
+            </div>
+        )}
 
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
           
-          {/* Header */}
           <div className="p-6 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
-             <h2 className="text-lg font-semibold text-slate-800 dark:text-white">
-               {existingUsers.length > 0 ? 'Choose an account' : 'Sign in'}
-             </h2>
-             <p className="text-sm text-slate-500">to continue to Gemini PhotoSync</p>
+             <h2 className="text-lg font-semibold text-slate-800 dark:text-white">Sign In</h2>
+             <p className="text-sm text-slate-500">Connect your Google Account</p>
           </div>
 
-          {/* User List */}
-          <div className="p-2">
+          <div className="p-4 space-y-2">
+            {/* Existing Session List (In-memory for this demo) */}
             {existingUsers.map(user => (
               <button
                 key={user.id}
@@ -63,34 +91,25 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ existingUsers, onLogin
               </button>
             ))}
 
-            {/* Add Account Button */}
             <button
-              onClick={handleGoogleLogin}
-              disabled={isLoading}
-              className={`w-full flex items-center gap-4 p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded-xl transition-colors text-left ${existingUsers.length > 0 ? 'border-t border-slate-100 dark:border-slate-700 mt-2' : ''}`}
+              onClick={handleLoginClick}
+              disabled={isLoading || !!error}
+              className="w-full flex items-center justify-center gap-3 p-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium rounded-xl transition-all shadow-sm active:scale-[0.98]"
             >
-               <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500">
-                  {isLoading ? <Loader2 size={20} className="animate-spin" /> : <Plus size={20} />}
-               </div>
-               <div className="flex-1">
-                  <p className="font-medium text-slate-900 dark:text-white">
-                    {existingUsers.length > 0 ? 'Use another account' : 'Sign in with Google'}
-                  </p>
-                  {existingUsers.length === 0 && (
-                     <div className="flex items-center gap-2 mt-1">
-                        <img src="https://www.google.com/favicon.ico" className="w-3 h-3 opacity-70" alt="Google" />
-                        <span className="text-xs text-slate-500">Access Google Photos Library</span>
-                     </div>
-                  )}
-               </div>
+               {isLoading ? (
+                  <Loader2 size={20} className="animate-spin text-blue-600" />
+               ) : (
+                  <>
+                    <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
+                    <span>Sign in with Google</span>
+                  </>
+               )}
             </button>
           </div>
         </div>
 
-        {/* Footer */}
-        <p className="text-center text-xs text-slate-400 mt-8">
-           By continuing, you grant access to your Google Photos library for syncing and AI analysis. 
-           Local albums are stored securely on your device.
+        <p className="text-center text-xs text-slate-400 mt-8 max-w-xs mx-auto">
+           Gemini PhotoSync uses the Google Photos Library API to visualize your cloud media.
         </p>
       </div>
     </div>

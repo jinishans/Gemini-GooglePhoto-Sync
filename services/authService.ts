@@ -1,45 +1,67 @@
 import { User } from '../types';
 
+// Declare global Google object to avoid TS errors without @types/google.accounts
+declare global {
+  interface Window {
+    google: any;
+  }
+}
+
+let tokenClient: any;
+
 /**
- * Mocks the Google OAuth 2.0 Flow.
- * In a real app, this would use the Google Identity Services SDK.
+ * Initializes the Google Identity Services Client.
+ * Must be called when the app/component mounts.
  */
-export const performGoogleLogin = async (): Promise<User> => {
-  // Simulate network delay for auth
-  await new Promise(resolve => setTimeout(resolve, 1500));
+export const initializeGoogleAuth = (clientId: string, callback: (user: User) => void) => {
+  if (!window.google) {
+    console.error("Google Identity Script not loaded");
+    return;
+  }
 
-  const mockUsers = [
-    {
-      id: 'usr_1',
-      name: 'Alex Chen',
-      email: 'alex.chen@gmail.com',
-      avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alex',
-      token: 'mock_token_alex_123'
-    },
-    {
-      id: 'usr_2',
-      name: 'Sarah Jones',
-      email: 'sarah.j@gmail.com',
-      avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
-      token: 'mock_token_sarah_456'
-    },
-    {
-      id: 'usr_3',
-      name: 'Mike Ross',
-      email: 'm.ross@gmail.com',
-      avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mike',
-      token: 'mock_token_mike_789'
-    }
-  ];
+  tokenClient = window.google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+    callback: async (response: any) => {
+      if (response.error) {
+        console.error(response);
+        return;
+      }
+      
+      // Use the access token to fetch user details
+      try {
+        const userInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+          headers: { Authorization: `Bearer ${response.access_token}` },
+        });
+        
+        const profile = await userInfoRes.json();
+        
+        const user: User = {
+          id: profile.sub,
+          name: profile.name,
+          email: profile.email,
+          avatarUrl: profile.picture,
+          token: response.access_token
+        };
 
-  // Randomly return a user to simulate different people logging in
-  // In reality, this would be the result of the user's choice in the Google Popup
-  const randomUser = mockUsers[Math.floor(Math.random() * mockUsers.length)];
+        callback(user);
+      } catch (err) {
+        console.error("Failed to fetch user profile", err);
+      }
+    },
+  });
+};
+
+/**
+ * Triggers the Google Popup Login Flow.
+ */
+export const performGoogleLogin = async (): Promise<void> => {
+  if (!tokenClient) {
+    alert("Google Auth not initialized. Check your Client ID in .env");
+    return;
+  }
   
-  // Create a slight variation to allow "multiple logins" of similar profiles if needed, 
-  // but here we just return the static ones for stability.
-  return {
-    ...randomUser,
-    id: randomUser.id + '_' + Date.now() // Ensure uniqueness for the session list
-  };
+  // Request an access token. This triggers the popup.
+  // We use requestAccessToken for API access, or if you just wanted ID, we'd use OneTap/Login.
+  tokenClient.requestAccessToken();
 };
