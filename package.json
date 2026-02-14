@@ -1,23 +1,69 @@
 {
-  "name": "",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "name": "gemini-smart-photo-sync",
+  "version": "1.0.0",
+  "description": "AI-Powered Photo Sync & Gallery",
+  "main": "electron/main.js",
+  "author": "Your Name",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "electron:dev": "concurrently \"npm start\" \"wait-on http://localhost:3000 && electron .\"",
+    "electron:build": "npm run build && electron-builder build --win",
+    "docker:build": "docker build -t gemini-photo-sync .",
+    "docker:run": "docker run -p 3000:3000 gemini-photo-sync",
+    "service:install": "node service/install.js",
+    "service:uninstall": "node service/uninstall.js",
+    "service:start": "node service/index.js"
   },
   "dependencies": {
-    "react-dom": "^19.2.4",
-    "react": "^19.2.4",
-    "lucide-react": "^0.564.0",
-    "@google/genai": "^1.41.0"
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "lucide-react": "^0.294.0",
+    "node-windows": "^1.0.0-beta.8",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-scripts": "5.0.1"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "@vitejs/plugin-react": "^5.0.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "concurrently": "^8.2.2",
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1",
+    "electron-is-dev": "^3.0.1",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.gemini.photosync",
+    "productName": "Gemini Smart Photo Sync",
+    "win": {
+      "target": [
+        "nsis",
+        "msi"
+      ],
+      "icon": "public/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true
+    },
+    "directories": {
+      "buildResources": "assets"
+    }
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
   }
 }
