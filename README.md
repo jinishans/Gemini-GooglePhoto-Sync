@@ -1,79 +1,55 @@
 # Gemini Smart Photo Sync
 
-A smart, AI-powered photo organization and gallery tool that works with Google Photos and local storage. It utilizes Google's Gemini API for semantic search, auto-tagging, and generative AI features.
+A smart, AI-powered photo organization and gallery tool that works with Google Photos and local storage.
 
 ## Prerequisites
 
-1.  **Google Gemini API Key**: Get one from [Google AI Studio](https://aistudio.google.com/).
-2.  **Docker Desktop**: Installed and running.
+1.  **Node.js**: Installed to build the React application.
+2.  **Python 3.x**: Installed to run the desktop tray utility.
 
----
+## 🚀 Installation & Running
 
-## 🐳 Option 1: Standard Docker (Linux Containers)
-
-Use this method if your Docker Desktop is in **Linux Containers** mode (default).
-
-### 1. Build and Run
-Run the following command in your terminal. Replace `YOUR_API_KEY` with your actual key.
+### 1. Build the Application
+First, compile the React application into static files.
 
 ```bash
-# Build the image
-docker build -t gemini-photo-sync .
-
-# Run the container
-# We pass the API key as an environment variable to the container
-docker run -d -p 3000:3000 -e API_KEY="YOUR_API_KEY" --name gemini-sync-app gemini-photo-sync
+npm install
+npm run build
 ```
 
-### 2. Access the App
-Open your browser and navigate to: [http://localhost:3000](http://localhost:3000)
+### 2. Install Python Dependencies
+Install the required libraries for the system tray icon and server.
 
----
-
-## 🪟 Option 2: Windows Native Containers
-
-Use this method **only** if you have switched Docker Desktop to **Windows Containers** mode. This is useful for native Windows integration.
-
-### 1. Switch Mode
-1.  Right-click the Docker Desktop icon in the system tray.
-2.  Select **"Switch to Windows containers..."**.
-3.  Wait for Docker to restart.
-
-### 2. Build and Run
-Use the specific Windows configuration files provided.
-
-**Using Docker Compose (Recommended):**
-
-1.  Open `docker-compose.windows.yml`.
-2.  Update the `API_KEY` environment variable directly in the file, OR export it in your PowerShell session:
-    ```powershell
-    $env:API_KEY="YOUR_ACTUAL_API_KEY"
-    ```
-3.  Run the compose command:
-    ```powershell
-    docker-compose -f docker-compose.windows.yml up -d --build
-    ```
-
-**Using Manual Docker Build:**
-
-```powershell
-# Build using the Windows Dockerfile
-docker build -f Dockerfile.windows -t gemini-photo-sync-win .
-
-# Run the container
-docker run -d -p 3000:3000 -e API_KEY="YOUR_API_KEY" --name gemini-sync-win gemini-photo-sync-win
+```bash
+pip install -r requirements.txt
 ```
 
-### 3. Access the App
-Open your browser and navigate to: [http://localhost:3000](http://localhost:3000)
+### 3. Run the Desktop Utility
+Run the Python script. This will start the local web server and place an icon in your system tray.
 
----
+```bash
+# Run normally (keeps console open)
+python run_app.py
 
-## 🛠️ Troubleshooting
+# OR Run silently (background)
+pythonw run_app.py
+```
 
-*   **"image operating system 'windows' cannot be used on this platform"**:
-    You are trying to run the Windows setup while Docker is in Linux mode. Switch Docker Desktop to Windows Containers, or use Option 1.
-*   **"image operating system 'linux' cannot be used on this platform"**:
-    You are trying to run Option 1 while Docker is in Windows mode. Switch Docker Desktop to Linux Containers.
-*   **API Key Issues**:
-    Ensure `process.env.API_KEY` is correctly passed. If the features requiring AI (Search/Upload) fail, check the container logs.
+*   **Open Dashboard**: Double-click the tray icon or select "Open Dashboard".
+*   **Auto-Start**: Right-click the tray icon and check "Run on Startup" to have it start with Windows automatically.
+
+## 🔑 API Key Configuration
+
+The application requires a Google GenAI API Key.
+Make sure you have a `.env` file in the root directory before running `npm run build`:
+
+```
+REACT_APP_API_KEY=your_actual_api_key_here
+```
+*(Note: Since this is a client-side build, the key is embedded during the build process)*.
+
+## Features
+
+*   **Smart Upload**: Drag & drop photos to auto-tag using Gemini Vision.
+*   **Vector Search**: Semantic search for your photos ("dog on the beach").
+*   **Tray Integration**: Runs in the background, capable of auto-starting.
