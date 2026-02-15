@@ -37,6 +37,22 @@ export const initializeGoogleAuth = (clientId: string, callback: (user: User) =>
           }
           return;
         }
+
+        // CRITICAL CHECK: Verify scopes were actually granted
+        // Google sometimes returns a token even if the user unchecked the boxes (partial consent).
+        console.log("Granted Scopes:", response.scope);
+        const hasPhotosScope = response.scope && (
+            response.scope.includes('photoslibrary.readonly') || 
+            response.scope.includes('https://www.googleapis.com/auth/photoslibrary.readonly')
+        );
+
+        if (!hasPhotosScope) {
+             alert("CRITICAL PERMISSION MISSING:\n\nYou did not grant permission to view your Google Photos.\n\n" +
+                   "1. Click 'Sign In' or 'Refresh Token' again.\n" +
+                   "2. When the Google popup appears, CHECK THE BOX next to 'See your Google Photos library'.\n" +
+                   "3. If you don't see the checkbox, you may need to remove this app from your Google Account permissions and try again.");
+             return;
+        }
         
         // Use the access token to fetch user details
         try {
@@ -77,7 +93,6 @@ export const performGoogleLogin = async (forceConsent: boolean = false): Promise
   
   // Request an access token. This triggers the popup.
   // Use prompt: 'consent' to ensure the user is asked for permissions again
-  // This fixes the "insufficient authentication scopes" error if the user previously skipped permissions.
   const config = forceConsent ? { prompt: 'consent' } : {};
   tokenClient.requestAccessToken(config);
 };

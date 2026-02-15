@@ -12,7 +12,7 @@ import {
   Plus,
   RefreshCw,
   LogOut,
-  ChevronRight,
+  ChevronRight, 
   Folder,
   FolderPlus,
   Download,
@@ -229,9 +229,22 @@ const App: React.FC = () => {
 
   // Handle Login / User Switch
   const handleLoginSuccess = (user: User) => {
-    setUsers(prev => [...prev, user]);
+    // Check if we are "refreshing" existing user or logging in new
+    setUsers(prev => {
+        const existing = prev.findIndex(u => u.email === user.email);
+        if (existing >= 0) {
+            const newUsers = [...prev];
+            newUsers[existing] = user; // Update token
+            return newUsers;
+        }
+        return [...prev, user];
+    });
     setCurrentUser(user);
-    setCurrentView(AppView.DASHBOARD);
+    if (currentView === AppView.SETTINGS) {
+        // Stay on settings if refreshing
+    } else {
+        setCurrentView(AppView.DASHBOARD);
+    }
   };
 
   const handleUserSwitch = (user: User) => {
