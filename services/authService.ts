@@ -19,12 +19,17 @@ export const initializeGoogleAuth = (clientId: string, callback: (user: User) =>
     return;
   }
 
+  // Debugging Helper: Log the origin to help fix "redirect_uri_mismatch"
+  const currentOrigin = window.location.origin;
+  console.log(`[GoogleAuth] Initializing. Current Origin: ${currentOrigin}`);
+  console.log(`[GoogleAuth] Ensure "${currentOrigin}" is added to 'Authorized JavaScript origins' in Google Cloud Console.`);
+
   tokenClient = window.google.accounts.oauth2.initTokenClient({
     client_id: clientId,
     scope: 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
     callback: async (response: any) => {
       if (response.error) {
-        console.error(response);
+        console.error("Google Auth Error:", response);
         return;
       }
       
@@ -57,11 +62,10 @@ export const initializeGoogleAuth = (clientId: string, callback: (user: User) =>
  */
 export const performGoogleLogin = async (): Promise<void> => {
   if (!tokenClient) {
-    alert("Google Auth not initialized. Check your Client ID in .env");
+    alert("Google Auth not initialized. Check console for details.");
     return;
   }
   
   // Request an access token. This triggers the popup.
-  // We use requestAccessToken for API access, or if you just wanted ID, we'd use OneTap/Login.
   tokenClient.requestAccessToken();
 };
