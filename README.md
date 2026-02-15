@@ -44,6 +44,7 @@ If you see `Error 403: access_denied` when logging in, it is because the Google 
 
 ## ⚙️ Environment Configuration
 
+### 1. Web App Config (`.env`)
 Create a `.env` file in the root directory:
 ```bash
 # From Google AI Studio (aistudio.google.com)
@@ -52,6 +53,21 @@ REACT_APP_API_KEY=your_gemini_api_key
 # From Google Cloud Console (Step 3 above)
 REACT_APP_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
 ```
+
+### 2. Desktop Sync Config (`sync_config.json`)
+A file named `sync_config.json` is included in the root. This file stores your desktop settings. You can edit it manually or use the Tray App Settings UI.
+
+```json
+{
+    "local_folder": "C:\\Users\\Name\\Pictures\\GeminiPhotos", 
+    "selected_albums": ["Vacation", "Family"],
+    "auto_sync": false,
+    "api_key": "Paste_Access_Token_Here"
+}
+```
+*   **local_folder**: The absolute path on your computer where photos will be downloaded. **Use double backslashes `\\` for Windows paths.**
+*   **api_key**: The Google Access Token (obtained from the Web App > Settings).
+*   **selected_albums**: List of album names to download.
 
 ---
 
@@ -77,8 +93,8 @@ REACT_APP_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
     *   **What it does**: 
         *   Starts a local web server on port 3000.
         *   Opens your browser to `http://localhost:3000`.
-        *   Loads your `sync_config.json` settings to allow quick access to your configured sync folder via the Tray Menu.
-    *   **Tray Menu**: Right-click the **Green Icon** in your system tray to open the gallery or your sync folder.
+        *   Reads `sync_config.json` to know where your "Sync Folder" is located.
+    *   **Tray Menu**: Right-click the **Green Icon** in your system tray to open the gallery or your configured sync folder.
 
 ---
 
@@ -123,6 +139,7 @@ Now that your web app is online, run the desktop client on your PC to download p
     *   **Paste the Access Token** you copied from the web app into the "Google Access Token" field.
     *   Select your local download folder (e.g., `D:\MyPhotos`).
     *   Click **Fetch Albums** to see your list, select albums, and click **Save & Sync**.
+    *   *Note: These settings are automatically saved to `sync_config.json`.*
 
 ---
 
