@@ -39,7 +39,8 @@ import {
   Square,
   Copy,
   AlertTriangle,
-  Save
+  Save,
+  RotateCcw
 } from 'lucide-react';
 import { TrayPopup } from './components/TrayPopup';
 import { SmartUpload } from './components/SmartUpload';
@@ -50,6 +51,7 @@ import { AppView, Photo, Album, SyncStatus, PhotoSource, SearchMode, VectorDBTyp
 import { expandSearchQuery } from './services/geminiService';
 import { vectorDb } from './services/vectorService';
 import { localAI, defaultAIConfig } from './services/localAIService';
+import { performGoogleLogin } from './services/authService';
 
 const App: React.FC = () => {
   // Auth State
@@ -143,6 +145,13 @@ const App: React.FC = () => {
       const albumsResponse = await fetch('https://photoslibrary.googleapis.com/v1/albums?pageSize=50', {
         headers: { Authorization: `Bearer ${token}` }
       });
+      
+      if (albumsResponse.status === 401) {
+          alert("Your session has expired. Please logout and login again, or refresh your token.");
+          setIsLoadingCloud(false);
+          return;
+      }
+      
       const albumsData = await albumsResponse.json();
       
       let realAlbums: Album[] = [];
@@ -189,7 +198,6 @@ const App: React.FC = () => {
 
     } catch (error) {
       console.error("Error fetching Google Photos:", error);
-      alert("Failed to fetch Google Photos. Ensure you granted permissions.");
     } finally {
       setIsLoadingCloud(false);
     }
@@ -349,6 +357,11 @@ const App: React.FC = () => {
       navigator.clipboard.writeText(currentUser.token);
       alert("Token copied! Paste this in the Desktop Tray App settings to sync.");
     }
+  };
+  
+  const handleRefreshToken = () => {
+     performGoogleLogin();
+     // The login callback will update the currentUser with a new token
   };
 
   const handleVoiceTranscript = (text: string) => {
@@ -726,9 +739,14 @@ const App: React.FC = () => {
                             <code className="text-xs text-slate-500 truncate max-w-[200px]">
                                 {currentUser.token ? currentUser.token.substring(0, 20) + '...' : 'Not Logged In'}
                             </code>
-                            <button onClick={copyToken} className="text-blue-600 hover:text-blue-700 text-xs font-bold flex items-center gap-1">
-                                <Copy size={14} /> Copy Token
-                            </button>
+                            <div className="flex items-center gap-2">
+                                <button onClick={handleRefreshToken} className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 p-1 rounded transition-colors" title="Refresh Token if expired">
+                                    <RotateCcw size={14} />
+                                </button>
+                                <button onClick={copyToken} className="text-blue-600 hover:text-blue-700 text-xs font-bold flex items-center gap-1">
+                                    <Copy size={14} /> Copy Token
+                                </button>
+                            </div>
                         </div>
                      </div>
                   </div>

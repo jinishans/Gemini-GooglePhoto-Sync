@@ -53,7 +53,7 @@ def save_config():
 
 # --- REAL Google Photos API Logic ---
 def get_headers():
-    token = config.get("api_key")
+    token = config.get("api_key", "").strip()
     if not token:
         return None
     return {
@@ -62,15 +62,28 @@ def get_headers():
     }
 
 def fetch_real_remote_albums():
+    """
+    Returns: (albums_list, error_message)
+    """
     headers = get_headers()
     if not headers:
-        return []
+        return [], "No API Token provided. Please copy it from the Web App."
+        
     try:
         logging.info("Fetching real albums from Google Photos API...")
         response = requests.get('https://photoslibrary.googleapis.com/v1/albums?pageSize=50', headers=headers)
-        if response.status_code == 401:
-            logging.error("Invalid Token. Please copy a new one from Web App.")
-            return []
+        
+        # Handle Errors
+        if response.status_code != 200:
+            try:
+                err_data = response.json()
+                # Try to extract readable error
+                error_details = err_data.get('error', {}).get('message', response.text)
+                logging.error(f"API Error ({response.status_code}): {error_details}")
+                return [], f"Google API Error ({response.status_code}):\n{error_details}"
+            except:
+                return [], f"HTTP Error {response.status_code}"
+
         data = response.json()
         albums = []
         if 'albums' in data:
@@ -80,10 +93,11 @@ def fetch_real_remote_albums():
                     "title": a['title'],
                     "items_count": int(a.get('mediaItemsCount', 0))
                 })
-        return albums
+        return albums, None
+
     except Exception as e:
-        logging.error(f"API Error: {e}")
-        return []
+        logging.error(f"Connection Error: {e}")
+        return [], f"Connection Failed: {str(e)}"
 
 def download_file(url, folder_path, filename):
     if not os.path.exists(folder_path):
@@ -108,6 +122,10 @@ def sync_album_content(album_id, album_name, headers):
     payload = {"albumId": album_id, "pageSize": 50}
     try:
         resp = requests.post('https://photoslibrary.googleapis.com/v1/mediaItems:search', headers=headers, json=payload)
+        if resp.status_code != 200:
+             logging.error(f"Error syncing album {album_name}: {resp.text}")
+             return
+
         data = resp.json()
         if 'mediaItems' in data:
             for item in data['mediaItems']:
@@ -131,11 +149,12 @@ def sync_worker():
                 logging.info(f"Auto-Sync Active. Albums to sync: {selected_names}")
                 headers = get_headers()
                 if headers:
-                    all_albums = fetch_real_remote_albums()
-                    for name in selected_names:
-                        album = next((a for a in all_albums if a['title'] == name), None)
-                        if album:
-                             sync_album_content(album['id'], album['title'], headers)
+                    albums, err = fetch_real_remote_albums()
+                    if not err:
+                        for name in selected_names:
+                            album = next((a for a in albums if a['title'] == name), None)
+                            if album:
+                                sync_album_content(album['id'], album['title'], headers)
             else:
                 logging.info("Auto-sync is on, but no albums selected in config.")
         time.sleep(60) 
@@ -170,14 +189,24 @@ def show_settings_gui():
                 folder_var.set(folder_selected)
 
         def fetch_albums_ui():
-            config["api_key"] = token_var.get()
-            albums = fetch_real_remote_albums()
-            if not albums:
-                messagebox.showerror("Error", "Could not fetch albums. Check your Token.")
-                return
+            # Update global config immediately so get_headers uses new token
+            config["api_key"] = token_var.get().strip()
+            
+            albums, error = fetch_real_remote_albums()
+            
+            # Clear existing list
             for widget in list_frame_ref[0].winfo_children():
                 widget.destroy()
             album_vars.clear()
+
+            if error:
+                messagebox.showerror("Sync Error", error)
+                return
+
+            if not albums:
+                ttk.Label(list_frame_ref[0], text="No albums found in this account.").pack(anchor=tk.W, padx=10)
+                return
+
             for album in albums:
                 var = tk.BooleanVar(value=(album['title'] in current_selected))
                 album_vars[album['id']] = {"var": var, "title": album['title']}
@@ -192,7 +221,7 @@ def show_settings_gui():
             config["local_folder"] = folder_var.get()
             config["auto_sync"] = auto_sync_var.get()
             config["selected_albums"] = new_selection
-            config["api_key"] = token_var.get()
+            config["api_key"] = token_var.get().strip()
             save_config()
             messagebox.showinfo("Saved", f"Configuration updated.\nSelected {len(new_selection)} albums.")
             start_sync_thread()
@@ -202,12 +231,18 @@ def show_settings_gui():
         frame.pack(fill=tk.BOTH, expand=True)
         ttk.Label(frame, text="Gemini Photo Sync", font=("Segoe UI", 14, "bold")).pack(pady=(0, 5))
         ttk.Label(frame, text="Google Access Token:", font=("Segoe UI", 9, "bold")).pack(anchor=tk.W)
-        ttk.Entry(frame, textvariable=token_var).pack(fill=tk.X, pady=(0, 10))
+        
+        token_frame = ttk.Frame(frame)
+        token_frame.pack(fill=tk.X, pady=(0, 10))
+        ttk.Entry(token_frame, textvariable=token_var).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        # Helpful tooltip
+        
         ttk.Label(frame, text="Local Download Folder:", font=("Segoe UI", 9, "bold")).pack(anchor=tk.W)
         f_frame = ttk.Frame(frame)
         f_frame.pack(fill=tk.X, pady=(0, 10))
         ttk.Entry(f_frame, textvariable=folder_var).pack(side=tk.LEFT, fill=tk.X, expand=True)
         ttk.Button(f_frame, text="Browse...", command=browse_folder).pack(side=tk.RIGHT, padx=(5, 0))
+        
         ttk.Label(frame, text="Select Albums to Sync:", font=("Segoe UI", 9, "bold")).pack(anchor=tk.W)
         ttk.Button(frame, text="Fetch Albums", command=fetch_albums_ui).pack(fill=tk.X, pady=(0,5))
         
@@ -223,7 +258,8 @@ def show_settings_gui():
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
-        if config["api_key"]:
+        # Initial Load
+        if config.get("api_key"):
             root.after(500, fetch_albums_ui)
         
         ttk.Checkbutton(frame, text="Enable Background Auto-Sync", variable=auto_sync_var).pack(anchor=tk.W, pady=10)
