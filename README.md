@@ -32,19 +32,20 @@ If you see `Error 403: access_denied` when logging in, it is because the Google 
 2.  Click **+ CREATE CREDENTIALS** > **OAuth client ID**.
 3.  **Application type**: Select **Web application**.
 4.  **Authorized JavaScript origins**:
-    *   Add `http://localhost:3000`
+    *   Add `http://localhost:3000` (For Local Dev)
+    *   **Later:** Add your Firebase URL (e.g., `https://your-project.web.app`) once deployed.
 5.  **Authorized redirect URIs**:
-    *   Add `http://localhost:3000`
+    *   Add `http://localhost:3000` (For Local Dev)
+    *   **Later:** Add your Firebase URL (e.g., `https://your-project.web.app`) once deployed.
 6.  Click **Create**.
 7.  Copy the **Client ID** (it ends in `.apps.googleusercontent.com`).
 
 ---
 
-## 🛠️ Installation & Running
+## ⚙️ Environment Configuration
 
-### 1. Environment Setup
 Create a `.env` file in the root directory:
-```
+```bash
 # From Google AI Studio (aistudio.google.com)
 REACT_APP_API_KEY=your_gemini_api_key
 
@@ -52,34 +53,77 @@ REACT_APP_API_KEY=your_gemini_api_key
 REACT_APP_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
 ```
 
-### 2. Build Web App
-```bash
-npm install
-npm run build
-```
+---
 
-### 3. Run Application (Option 1: Fully Local)
-*Best for privacy and offline usage.*
-1.  Install Python dependencies: `pip install -r requirements.txt`
-2.  Run the host script:
+## 🚀 Usage Option 1: Fully Local Development
+*Best for testing, privacy, and offline usage.*
+
+1.  **Install Dependencies**:
+    ```bash
+    npm install
+    pip install -r requirements.txt
+    ```
+
+2.  **Build the Web App**:
+    ```bash
+    npm run build
+    ```
+
+3.  **Run the Local Host Script**:
+    This script serves the React app locally and provides a System Tray icon.
     ```bash
     python run_local_host.py
     ```
-3.  A Green Icon will appear in your tray. Browser opens at `http://localhost:3000`.
-
-### 4. Run Application (Option 2: Cloud Sync)
-*Best for specific album downloading.*
-1.  Deploy the `dist` folder to Firebase/Vercel (or just run `npm run preview`).
-2.  Run the sync tool:
-    ```bash
-    python run_cloud_sync.py
-    ```
-3.  Right-click the Blue Tray Icon > **Settings**.
-4.  Paste your **Access Token** (get this from the Web App Settings screen after logging in).
+    *   A Green Icon will appear in your tray.
+    *   Browser opens at `http://localhost:3000`.
 
 ---
 
-## 🔑 Features
+## ☁️ Usage Option 2: Cloud Deployment (Firebase)
+*Best for accessing your gallery from anywhere while syncing to your home PC.*
+
+### Part A: Deploy Web App to Firebase
+1.  **Install Firebase Tools**:
+    ```bash
+    npm install -g firebase-tools
+    ```
+2.  **Login & Initialize**:
+    ```bash
+    firebase login
+    firebase init hosting
+    ```
+    *   Select **"Use an existing project"** (or create new).
+    *   Public directory: `dist`
+    *   Configure as a single-page app? **Yes**
+    *   Set up automatic builds and deploys with GitHub? **No** (unless you want to).
+3.  **Build & Deploy**:
+    ```bash
+    npm run build
+    firebase deploy
+    ```
+4.  **Update Google Cloud Console**:
+    *   Go back to [Google Cloud Console Credentials](https://console.cloud.google.com/apis/credentials).
+    *   Edit your OAuth Client ID.
+    *   Add your new Firebase URL (e.g., `https://project-id.web.app`) to **Authorized JavaScript origins** and **Authorized redirect URIs**.
+
+### Part B: Connect Desktop Sync Client
+Now that your web app is online, run the desktop client on your PC to download photos.
+
+1.  **Open your deployed Firebase App** in a browser and **Log In**.
+2.  Go to **Settings** in the Web App and click **"Copy Access Token"**.
+3.  **Run the Sync Tool** on your PC:
+    ```bash
+    python run_cloud_sync.py
+    ```
+4.  **Configure the Client**:
+    *   Right-click the **Blue Tray Icon** > **Sync Settings...**
+    *   **Paste the Access Token** you copied from the web app into the "Google Access Token" field.
+    *   Select your local download folder (e.g., `D:\MyPhotos`).
+    *   Click **Fetch Albums** to see your list, select albums, and click **Save & Sync**.
+
+---
+
+## 🔑 Key Features
 
 *   **Google Photos Integration**: Lists real albums and allows downloading them to your PC.
 *   **Smart Upload**: Drag & drop photos to auto-tag using Gemini Vision.
