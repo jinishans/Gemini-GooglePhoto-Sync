@@ -32,7 +32,9 @@ import {
   Play,
   User as UserIcon,
   MoreVertical,
-  Laptop
+  Laptop,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react';
 import { TrayPopup } from './components/TrayPopup';
 import { SmartUpload } from './components/SmartUpload';
@@ -122,7 +124,8 @@ const App: React.FC = () => {
     
     // In hosted mode, all photos are technically "cloud" photos until downloaded
     setPhotos(cloudPhotos);
-    setSyncedAlbumNames(new Set()); 
+    // Pre-select some albums for sync simulation
+    setSyncedAlbumNames(new Set(['Vacation 2023', 'Pets']));
     
     // Simulate checking if desktop client is online
     setTimeout(() => setDesktopClientConnected(true), 2000);
@@ -437,8 +440,8 @@ const App: React.FC = () => {
                             </h2>
                             <p className="text-slate-600 dark:text-slate-400 mt-1 max-w-xl text-sm">
                                {desktopClientConnected 
-                                 ? "Your local computer is connected. New photos from your configured local folder will automatically appear here."
-                                 : "Run the Python Tray App on your computer to sync local photos to this web gallery."}
+                                 ? "Your local computer is connected. Configuration of sync folders is available in the tray app."
+                                 : "Run the Python Tray App on your computer to download albums to your hard drive."}
                             </p>
                          </div>
                       </div>
@@ -449,7 +452,7 @@ const App: React.FC = () => {
                               : 'bg-white text-amber-700 border border-amber-200'
                            }`}
                       >
-                         {desktopClientConnected ? 'Online' : 'Waiting for Desktop App...'}
+                         {desktopClientConnected ? 'Online' : 'Waiting...'}
                       </button>
                    </div>
                 </div>
@@ -609,23 +612,50 @@ const App: React.FC = () => {
               {currentView === AppView.ALBUMS && (
                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                     <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Cloud Albums</h2>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2">
+                        <CheckCircle2 size={16} />
+                        {syncedAlbumNames.size} Albums Synced to Local Drive
+                    </div>
                  </div>
               )}
               
               {currentView === AppView.ALBUMS ? (
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
                   {albums.map(album => (
-                     <div key={album.id} className={`group relative rounded-xl overflow-hidden border transition-all duration-200 border-slate-200 dark:border-slate-700 hover:shadow-md`}>
+                     <div key={album.id} className={`group relative rounded-xl overflow-hidden border transition-all duration-200 hover:shadow-md
+                        ${album.syncEnabled 
+                            ? 'border-blue-500 ring-1 ring-blue-500' 
+                            : 'border-slate-200 dark:border-slate-700'
+                        }
+                     `}>
                         <div className="aspect-square bg-slate-100 dark:bg-slate-900 relative overflow-hidden">
                            <img src={album.coverUrl} alt={album.name} className="w-full h-full object-cover" />
+                           {album.syncEnabled && (
+                               <div className="absolute top-2 right-2 bg-blue-500 text-white p-1 rounded-full shadow-md">
+                                   <Download size={12} />
+                               </div>
+                           )}
                         </div>
                         <div className="p-4 bg-white dark:bg-slate-800">
-                           <div className="flex justify-between items-start gap-2">
+                           <div className="flex justify-between items-start gap-2 mb-2">
                               <h3 className="font-semibold text-slate-900 dark:text-slate-100 truncate flex-1">{album.name}</h3>
                            </div>
-                           <button className={`w-full mt-2 py-1.5 px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-2 bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300`}>
-                              <Globe size={12} /> Share Link
-                           </button>
+                           <div className="flex flex-col gap-2">
+                                <button 
+                                    onClick={() => toggleAlbumSync(album.name)}
+                                    className={`w-full py-1.5 px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-2 transition-colors
+                                        ${album.syncEnabled 
+                                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200' 
+                                            : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 hover:bg-slate-200'
+                                        }`}
+                                >
+                                    {album.syncEnabled ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                                    {album.syncEnabled ? 'Syncing' : 'Sync Off'}
+                                </button>
+                                <button className="w-full py-1.5 px-3 rounded-lg text-xs font-medium flex items-center justify-center gap-2 bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                    <Globe size={12} /> Share Link
+                                </button>
+                           </div>
                         </div>
                      </div>
                   ))}
@@ -655,10 +685,35 @@ const App: React.FC = () => {
           {currentView === AppView.SETTINGS && (
             <div className="max-w-2xl mx-auto space-y-6">
                <div className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-sm border border-slate-200 dark:border-slate-700">
-                  <h3 className="text-lg font-bold mb-4">Cloud Configuration</h3>
-                  <div className="text-sm text-slate-500 mb-4">
-                     This application is running in Hosted Mode. Most settings are managed via the Desktop Tray Application.
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                      <Laptop className="text-blue-500" /> Desktop Sync Configuration
+                  </h3>
+                  
+                  <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800 mb-6">
+                     <p className="text-sm text-blue-800 dark:text-blue-200">
+                        <strong>Sync Active:</strong> {syncedAlbumNames.size} Albums Selected
+                     </p>
+                     <p className="text-xs text-blue-600 dark:text-blue-300 mt-1">
+                        These albums will be downloaded to your configured local folder by the Desktop Tray App.
+                     </p>
                   </div>
+
+                  <div className="space-y-2 mb-6">
+                      <p className="text-sm font-medium mb-2">Selected Albums:</p>
+                      {Array.from(syncedAlbumNames).map(name => (
+                          <div key={name} className="flex items-center justify-between p-2 bg-slate-50 dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700">
+                              <span className="text-sm">{name}</span>
+                              <button onClick={() => toggleAlbumSync(name)} className="text-red-500 hover:text-red-600">
+                                  <XCircle size={16} />
+                              </button>
+                          </div>
+                      ))}
+                      {syncedAlbumNames.size === 0 && (
+                          <p className="text-sm text-slate-400 italic">No albums selected. Go to "Cloud Albums" to select.</p>
+                      )}
+                  </div>
+
+                  <h3 className="text-lg font-bold mb-4 pt-4 border-t border-slate-100 dark:border-slate-700">Advanced Config</h3>
                   
                   {/* Search Engine Config */}
                   <div className="space-y-4 mb-6">
@@ -675,17 +730,6 @@ const App: React.FC = () => {
                              </select>
                          </div>
                       </div>
-                  </div>
-
-                  <h3 className="text-lg font-bold mb-4 pt-4 border-t border-slate-100 dark:border-slate-700">Privacy & Sharing</h3>
-                  <div className="space-y-4">
-                     <div className="flex items-center justify-between">
-                        <div>
-                           <p className="font-medium">Public Link Access</p>
-                           <p className="text-sm text-slate-500">Allow anyone with the link to view shared albums</p>
-                        </div>
-                        <input type="checkbox" className="toggle-checkbox" defaultChecked />
-                     </div>
                   </div>
                </div>
             </div>
