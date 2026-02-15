@@ -151,6 +151,13 @@ const App: React.FC = () => {
           setIsLoadingCloud(false);
           return;
       }
+
+      if (albumsResponse.status === 403) {
+          console.error("403 Forbidden: Insufficient scopes.");
+          // Don't alert here immediately on load to avoid spamming, but handle gracefully
+          setIsLoadingCloud(false);
+          return;
+      }
       
       const albumsData = await albumsResponse.json();
       
@@ -360,8 +367,8 @@ const App: React.FC = () => {
   };
   
   const handleRefreshToken = () => {
-     performGoogleLogin();
-     // The login callback will update the currentUser with a new token
+     // Force consent to get permissions again if they were missed
+     performGoogleLogin(true);
   };
 
   const handleVoiceTranscript = (text: string) => {

@@ -67,13 +67,17 @@ export const initializeGoogleAuth = (clientId: string, callback: (user: User) =>
 
 /**
  * Triggers the Google Popup Login Flow.
+ * @param forceConsent If true, forces the consent screen to appear again. Useful for missing scopes.
  */
-export const performGoogleLogin = async (): Promise<void> => {
+export const performGoogleLogin = async (forceConsent: boolean = false): Promise<void> => {
   if (!tokenClient) {
     alert("Google Auth not initialized. Check console for details.");
     return;
   }
   
   // Request an access token. This triggers the popup.
-  tokenClient.requestAccessToken();
+  // Use prompt: 'consent' to ensure the user is asked for permissions again
+  // This fixes the "insufficient authentication scopes" error if the user previously skipped permissions.
+  const config = forceConsent ? { prompt: 'consent' } : {};
+  tokenClient.requestAccessToken(config);
 };

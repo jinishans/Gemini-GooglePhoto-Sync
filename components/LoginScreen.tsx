@@ -48,7 +48,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ existingUsers, onLogin
       return;
     }
     setIsLoading(true);
-    performGoogleLogin();
+    // Force consent to ensure we get the photoslibrary scope
+    performGoogleLogin(true);
   };
 
   return (
@@ -116,6 +117,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ existingUsers, onLogin
 
         <p className="text-center text-xs text-slate-400 mt-8 max-w-xs mx-auto">
            Gemini PhotoSync uses the Google Photos Library API to visualize your cloud media.
+           <br/><br/>
+           <span className="font-bold text-amber-600">Important:</span> Ensure you tick all checkboxes in the Google consent screen to allow photo access.
         </p>
       </div>
     </div>

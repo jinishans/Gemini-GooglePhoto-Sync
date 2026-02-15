@@ -145,6 +145,13 @@ Now that your web app is online, run the desktop client on your PC to download p
 
 ## 🔧 Troubleshooting
 
+### "Request had insufficient authentication scopes (403)"
+This means you did not grant permission to view your Google Photos.
+1.  Go to the Web App > Settings.
+2.  Click the **Refresh Token** button (the small cycle icon next to the token).
+3.  **IMPORTANT:** When the Google popup appears, ensure you **check the boxes** to allow the app to view your Google Photos library.
+4.  Copy the new token and paste it into the desktop app.
+
 ### "Catastrophic Failure" or GUI Crashes
 If the Python script crashes when opening settings, it is likely a threading issue.
 *   Ensure you are using the latest version of `run_cloud_sync.py`.
