@@ -69,13 +69,16 @@ REACT_APP_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
     npm run build
     ```
 
-3.  **Run the Local Host Script**:
-    This script serves the React app locally and provides a System Tray icon.
+3.  **Run the Local Host Script (`run_local_host.py`)**:
+    This script acts as a simple web server for the React app and provides a tray icon for quick access.
     ```bash
     python run_local_host.py
     ```
-    *   A Green Icon will appear in your tray.
-    *   Browser opens at `http://localhost:3000`.
+    *   **What it does**: 
+        *   Starts a local web server on port 3000.
+        *   Opens your browser to `http://localhost:3000`.
+        *   Loads your `sync_config.json` settings to allow quick access to your configured sync folder via the Tray Menu.
+    *   **Tray Menu**: Right-click the **Green Icon** in your system tray to open the gallery or your sync folder.
 
 ---
 
@@ -106,12 +109,12 @@ REACT_APP_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
     *   Edit your OAuth Client ID.
     *   Add your new Firebase URL (e.g., `https://project-id.web.app`) to **Authorized JavaScript origins** and **Authorized redirect URIs**.
 
-### Part B: Connect Desktop Sync Client
+### Part B: Connect Desktop Sync Client (`run_cloud_sync.py`)
 Now that your web app is online, run the desktop client on your PC to download photos.
 
 1.  **Open your deployed Firebase App** in a browser and **Log In**.
 2.  Go to **Settings** in the Web App and click **"Copy Access Token"**.
-3.  **Run the Sync Tool** on your PC:
+3.  **Run the Sync Tool**:
     ```bash
     python run_cloud_sync.py
     ```
@@ -123,9 +126,13 @@ Now that your web app is online, run the desktop client on your PC to download p
 
 ---
 
-## 🔑 Key Features
+## 🔧 Troubleshooting
 
-*   **Google Photos Integration**: Lists real albums and allows downloading them to your PC.
-*   **Smart Upload**: Drag & drop photos to auto-tag using Gemini Vision.
-*   **Vector Search**: Semantic search for your photos ("dog on the beach").
-*   **Tray Integration**: Runs in the background with auto-start capabilities.
+### "Catastrophic Failure" or GUI Crashes
+If the Python script crashes when opening settings, it is likely a threading issue.
+*   Ensure you are using the latest version of `run_cloud_sync.py`.
+*   We have separated the Tray Icon and the Settings Window into different threads to prevent conflicts.
+
+### "403 Access Denied"
+*   Review "Critical Setup" at the top of this file. 
+*   Ensure your email is in the **Test Users** list in Google Cloud Console.

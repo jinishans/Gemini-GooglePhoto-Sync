@@ -3,6 +3,7 @@ import sys
 import threading
 import webbrowser
 import logging
+import json
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 from socketserver import ThreadingMixIn
 
@@ -16,9 +17,23 @@ APP_NAME = "Gemini Photo Sync (Local)"
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 BUILD_DIR = os.path.join(ROOT_DIR, 'dist')
 ICON_PATH = os.path.join(ROOT_DIR, 'public', 'favicon.ico')
+CONFIG_FILE = os.path.join(ROOT_DIR, "sync_config.json")
 
 # Setup Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Global Config State
+sync_config = {}
+
+def load_config():
+    global sync_config
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                sync_config = json.load(f)
+                logging.info(f"Loaded config: {sync_config.get('local_folder', 'No folder set')}")
+        except Exception as e:
+            logging.error(f"Failed to load config: {e}")
 
 class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     """Handle requests in a separate thread."""
@@ -53,11 +68,24 @@ def start_server():
 def open_browser(icon, item):
     webbrowser.open(f'http://localhost:{PORT}')
 
+def open_sync_folder(icon, item):
+    # Reload config in case it changed
+    load_config()
+    folder = sync_config.get("local_folder")
+    if folder and os.path.exists(folder):
+        os.startfile(folder) if os.name == 'nt' else webbrowser.open(folder)
+    else:
+        logging.warning("No valid local folder configured in sync_config.json")
+        webbrowser.open(ROOT_DIR)
+
 def quit_app(icon, item):
     icon.stop()
     os._exit(0)
 
 def main():
+    # 0. Load Config
+    load_config()
+
     # 1. Start Web Server
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()
@@ -71,6 +99,7 @@ def main():
 
     menu = Menu(
         item('Open Local Gallery', open_browser, default=True),
+        item('Open Sync Folder', open_sync_folder),
         Menu.SEPARATOR,
         item('Quit', quit_app)
     )
