@@ -40,7 +40,7 @@ class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
 
 class ReactHandler(SimpleHTTPRequestHandler):
-    """Serves the React Build directory."""
+    """Serves the React Build directory and handles API requests."""
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=BUILD_DIR, **kwargs)
 
@@ -49,11 +49,71 @@ class ReactHandler(SimpleHTTPRequestHandler):
         pass
 
     def do_GET(self):
+        # API: Get Config
+        if self.path == '/api/config':
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            
+            # Reload from disk to ensure freshness
+            if os.path.exists(CONFIG_FILE):
+                with open(CONFIG_FILE, 'r') as f:
+                    content = f.read()
+                    self.wfile.write(content.encode('utf-8'))
+            else:
+                self.wfile.write(json.dumps({}).encode('utf-8'))
+            return
+
         # Handle SPA routing: if file doesn't exist, serve index.html
         path = self.translate_path(self.path)
         if not os.path.exists(path) or os.path.isdir(path):
             self.path = '/index.html'
         super().do_GET()
+
+    def do_POST(self):
+        # API: Update Config
+        if self.path == '/api/config':
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            try:
+                new_data = json.loads(post_data.decode('utf-8'))
+                
+                # Load existing to preserve other keys like local_folder
+                current_config = {}
+                if os.path.exists(CONFIG_FILE):
+                    with open(CONFIG_FILE, 'r') as f:
+                        current_config = json.load(f)
+                
+                # Update allowed fields
+                if 'selected_albums' in new_data:
+                    current_config['selected_albums'] = new_data['selected_albums']
+                if 'api_key' in new_data:
+                    current_config['api_key'] = new_data['api_key']
+                
+                # Save back to file
+                with open(CONFIG_FILE, 'w') as f:
+                    json.dump(current_config, f, indent=4)
+
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(json.dumps({"status": "success", "config": current_config}).encode('utf-8'))
+                logging.info("Config updated via Web API")
+            except Exception as e:
+                logging.error(f"Error updating config: {e}")
+                self.send_response(500)
+                self.end_headers()
+            return
+            
+    def do_OPTIONS(self):
+        # Handle CORS preflight
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
 
 def start_server():
     """Starts the web server."""

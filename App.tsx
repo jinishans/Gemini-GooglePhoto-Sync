@@ -38,7 +38,8 @@ import {
   CheckSquare,
   Square,
   Copy,
-  AlertTriangle
+  AlertTriangle,
+  Save
 } from 'lucide-react';
 import { TrayPopup } from './components/TrayPopup';
 import { SmartUpload } from './components/SmartUpload';
@@ -96,6 +97,43 @@ const App: React.FC = () => {
 
   // Local Folder State
   const [desktopClientConnected, setDesktopClientConnected] = useState(false);
+
+  // --- API Interaction for Sync Config ---
+  const saveConfigToLocal = async (selectedAlbums: string[]) => {
+    try {
+      const response = await fetch('http://localhost:3000/api/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          selected_albums: selectedAlbums,
+          api_key: currentUser?.token || ''
+        })
+      });
+      if (response.ok) {
+        console.log("Synced configuration to desktop client");
+        setDesktopClientConnected(true);
+      }
+    } catch (e) {
+      console.warn("Could not save config to localhost. Desktop client might be offline.", e);
+      setDesktopClientConnected(false);
+    }
+  };
+
+  const loadConfigFromLocal = async () => {
+    try {
+      const response = await fetch('http://localhost:3000/api/config');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.selected_albums && Array.isArray(data.selected_albums)) {
+          setSyncedAlbumNames(new Set(data.selected_albums));
+        }
+        setDesktopClientConnected(true);
+      }
+    } catch (e) {
+      console.warn("Could not load config from localhost.");
+      setDesktopClientConnected(false);
+    }
+  };
 
   // --- Real Google Photos API Fetching ---
   const fetchGooglePhotosLibrary = async (token: string) => {
@@ -165,8 +203,8 @@ const App: React.FC = () => {
         return;
     }
 
-    // Connect to Desktop Client (Simulated presence)
-    setTimeout(() => setDesktopClientConnected(true), 2000);
+    // Try to load existing local config
+    loadConfigFromLocal();
 
     // Fetch Real Data
     if (currentUser.token) {
@@ -210,7 +248,7 @@ const App: React.FC = () => {
     }
   }, [photos]);
 
-  // Update Sync Status based on selection
+  // Update Sync Status based on selection and SAVE to Local
   useEffect(() => {
     setAlbums(prev => prev.map(a => ({
       ...a,
@@ -221,6 +259,12 @@ const App: React.FC = () => {
       ...prev,
       syncedFiles: albums.filter(a => syncedAlbumNames.has(a.name)).reduce((acc, curr) => acc + curr.count, 0)
     }));
+
+    // Auto-save to local config if connected
+    if (syncedAlbumNames.size > 0 || desktopClientConnected) {
+       saveConfigToLocal(Array.from(syncedAlbumNames));
+    }
+
   }, [syncedAlbumNames]);
 
   // Handle Search Logic
@@ -471,20 +515,27 @@ const App: React.FC = () => {
                             </h2>
                             <p className="text-slate-600 dark:text-slate-400 mt-1 max-w-xl text-sm">
                                {desktopClientConnected 
-                                 ? "Your local computer is connected. Configuration of sync folders is available in the tray app."
+                                 ? "Your local computer is connected and managing your sync selections automatically."
                                  : "Run the Python Tray App on your computer to download albums to your hard drive."}
                             </p>
                          </div>
                       </div>
-                      <button 
-                         className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors shadow-sm flex items-center gap-2 cursor-default
-                           ${desktopClientConnected 
-                              ? 'bg-white text-green-700 border border-green-200' 
-                              : 'bg-white text-amber-700 border border-amber-200'
-                           }`}
-                      >
-                         {desktopClientConnected ? 'Online' : 'Waiting...'}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {desktopClientConnected && (
+                            <span className="flex items-center gap-1 text-xs text-green-700 bg-white/50 px-2 py-1 rounded">
+                                <Save size={12} /> Config Auto-Save
+                            </span>
+                        )}
+                        <button 
+                            className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors shadow-sm flex items-center gap-2 cursor-default
+                            ${desktopClientConnected 
+                                ? 'bg-white text-green-700 border border-green-200' 
+                                : 'bg-white text-amber-700 border border-amber-200'
+                            }`}
+                        >
+                            {desktopClientConnected ? 'Online' : 'Waiting...'}
+                        </button>
+                      </div>
                    </div>
                 </div>
 

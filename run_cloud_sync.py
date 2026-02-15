@@ -122,9 +122,13 @@ def sync_worker():
     global sync_thread_active
     sync_thread_active = True
     while not stop_event.is_set():
+        # Reload config every iteration to check for updates from Web App
+        load_config()
+        
         if config["auto_sync"] and config["local_folder"] and config["api_key"]:
             selected_names = config.get("selected_albums", [])
             if selected_names:
+                logging.info(f"Auto-Sync Active. Albums to sync: {selected_names}")
                 headers = get_headers()
                 if headers:
                     all_albums = fetch_real_remote_albums()
@@ -132,6 +136,8 @@ def sync_worker():
                         album = next((a for a in all_albums if a['title'] == name), None)
                         if album:
                              sync_album_content(album['id'], album['title'], headers)
+            else:
+                logging.info("Auto-sync is on, but no albums selected in config.")
         time.sleep(60) 
     sync_thread_active = False
 
