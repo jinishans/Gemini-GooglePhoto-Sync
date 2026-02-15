@@ -26,7 +26,8 @@ export const initializeGoogleAuth = (clientId: string, callback: (user: User) =>
 
   tokenClient = window.google.accounts.oauth2.initTokenClient({
     client_id: clientId,
-    scope: 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
+    // ADDED: photoslibrary.readonly scope
+    scope: 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/photoslibrary.readonly',
     callback: async (response: any) => {
       if (response.error) {
         console.error("Google Auth Error:", response);
@@ -46,7 +47,7 @@ export const initializeGoogleAuth = (clientId: string, callback: (user: User) =>
           name: profile.name,
           email: profile.email,
           avatarUrl: profile.picture,
-          token: response.access_token
+          token: response.access_token // This token now has Photos access
         };
 
         callback(user);

@@ -18,9 +18,9 @@ from PIL import Image, ImageDraw
 CONFIG_FILE = "sync_config.json"
 DEFAULT_CONFIG = {
     "local_folder": os.path.join(os.path.expanduser("~"), "GeminiPhotos"),
-    "selected_albums": ["Vacation 2023"], # Default mock selection
+    "selected_albums": [], 
     "auto_sync": False,
-    "api_key": ""
+    "api_key": "" # This is now the Google OAuth Access Token
 }
 
 # Global State
@@ -47,70 +47,109 @@ def save_config():
     except Exception as e:
         logging.error(f"Failed to save config: {e}")
 
-# --- MOCK Google Photos API (Simulating the Cloud) ---
-# In a real app, this would use google-auth-oauthlib and googleapiclient
-def fetch_mock_remote_albums():
-    return [
-        {"id": "alb1", "title": "Vacation 2023", "items_count": 15},
-        {"id": "alb2", "title": "Pets", "items_count": 8},
-        {"id": "alb3", "title": "Family Reunion", "items_count": 24},
-        {"id": "alb4", "title": "Food Blog", "items_count": 6},
-        {"id": "alb5", "title": "Nature Hikes", "items_count": 12},
-    ]
+# --- REAL Google Photos API Logic ---
 
-def simulate_download_photo(album_name, folder_path):
-    """Creates a placeholder image file to simulate downloading."""
+def get_headers():
+    token = config.get("api_key")
+    if not token:
+        return None
+    return {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+
+def fetch_real_remote_albums():
+    headers = get_headers()
+    if not headers:
+        return []
+    
+    try:
+        logging.info("Fetching real albums from Google Photos API...")
+        response = requests.get('https://photoslibrary.googleapis.com/v1/albums?pageSize=50', headers=headers)
+        
+        if response.status_code == 401:
+            logging.error("Invalid Token. Please copy a new one from Web App.")
+            return []
+            
+        data = response.json()
+        albums = []
+        if 'albums' in data:
+            for a in data['albums']:
+                albums.append({
+                    "id": a['id'],
+                    "title": a['title'],
+                    "items_count": int(a.get('mediaItemsCount', 0))
+                })
+        return albums
+    except Exception as e:
+        logging.error(f"API Error: {e}")
+        return []
+
+def download_file(url, folder_path, filename):
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
-    
-    filename = f"{album_name.replace(' ', '_')}_{random.randint(1000, 9999)}.jpg"
+        
     full_path = os.path.join(folder_path, filename)
+    if os.path.exists(full_path):
+        return # Skip if exists
+        
+    try:
+        # Google Photos Base URL requires size param
+        download_url = f"{url}=d" # =d forces download original
+        r = requests.get(download_url, stream=True)
+        if r.status_code == 200:
+            with open(full_path, 'wb') as f:
+                for chunk in r.iter_content(1024):
+                    f.write(chunk)
+            logging.info(f"Downloaded: {filename}")
+    except Exception as e:
+        logging.error(f"Failed to download {filename}: {e}")
+
+def sync_album_content(album_id, album_name, headers):
+    logging.info(f"Syncing Album: {album_name}")
+    album_path = os.path.join(config["local_folder"], album_name)
     
-    # Create a simple colored square image using PIL
-    color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
-    img = Image.new('RGB', (400, 400), color=color)
-    d = ImageDraw.Draw(img)
-    d.text((10,10), f"Google Photos\n{album_name}", fill=(255,255,255))
+    # We need to search media items for this album
+    payload = {
+        "albumId": album_id,
+        "pageSize": 50
+    }
     
-    img.save(full_path)
-    return filename
+    try:
+        resp = requests.post('https://photoslibrary.googleapis.com/v1/mediaItems:search', headers=headers, json=payload)
+        data = resp.json()
+        
+        if 'mediaItems' in data:
+            for item in data['mediaItems']:
+                filename = item['filename']
+                base_url = item['baseUrl']
+                download_file(base_url, album_path, filename)
+    except Exception as e:
+        logging.error(f"Error syncing album content: {e}")
 
 # --- Background Sync Logic ---
 def sync_worker():
     global sync_thread_active
     sync_thread_active = True
-    logging.info("Cloud Sync Worker Started")
     
-    # Create default folder if not exists
-    if config["local_folder"] and not os.path.exists(config["local_folder"]):
-        try:
-            os.makedirs(config["local_folder"])
-        except:
-            pass
-
     while not stop_event.is_set():
-        if config["auto_sync"] and config["local_folder"]:
-            selected = config.get("selected_albums", [])
+        if config["auto_sync"] and config["local_folder"] and config["api_key"]:
+            selected_names = config.get("selected_albums", [])
             
-            if not selected:
-                logging.info("No albums selected for sync.")
-            
-            for album in selected:
-                # Simulate checking for new items
-                logging.info(f"Checking album '{album}' for new items...")
-                time.sleep(1) # Network delay
-                
-                # 30% chance to "find" a new photo and download it
-                if random.random() > 0.7:
-                    logging.info(f"New item found in '{album}'. Downloading...")
-                    album_path = os.path.join(config["local_folder"], album)
-                    fname = simulate_download_photo(album, album_path)
-                    logging.info(f"Downloaded: {fname}")
+            if selected_names:
+                headers = get_headers()
+                if headers:
+                    # We need Album IDs, so fetch list first
+                    # In a real efficient app, we'd store IDs in config, but names are more readable for this demo
+                    all_albums = fetch_real_remote_albums()
                     
-                    # Notify user (Simulated Toast)
-                    # In Windows: from win10toast import ToastNotifier...
+                    for name in selected_names:
+                        # Find ID
+                        album = next((a for a in all_albums if a['title'] == name), None)
+                        if album:
+                             sync_album_content(album['id'], album['title'], headers)
             
-        time.sleep(10) # Check every 10 seconds for demo purposes
+        time.sleep(60) # Check every minute
     
     sync_thread_active = False
 
@@ -123,63 +162,95 @@ def start_sync_thread():
 # --- GUI Settings Window ---
 def open_settings_window(icon, item):
     root = tk.Tk()
-    root.title("Gemini Cloud Sync Settings")
-    root.geometry("600x600")
+    root.title("Gemini Sync Configuration")
+    root.geometry("600x650")
     
-    style = ttk.Style()
-    style.configure("TLabel", padding=5)
-    style.configure("TButton", padding=5)
-
+    # Lift window to top
+    root.attributes('-topmost',True)
+    root.after_idle(root.attributes,'-topmost',False)
+    
     folder_var = tk.StringVar(value=config.get("local_folder", ""))
     auto_sync_var = tk.BooleanVar(value=config.get("auto_sync", False))
+    token_var = tk.StringVar(value=config.get("api_key", ""))
     
     # Album Selection State
-    remote_albums = fetch_mock_remote_albums()
     album_vars = {}
     current_selected = set(config.get("selected_albums", []))
+    
+    # Canvas for list
+    list_frame_ref = [None]
 
     def browse_folder():
-        folder_selected = filedialog.askdirectory()
+        folder_selected = filedialog.askdirectory(initialdir=folder_var.get())
         if folder_selected:
             folder_var.set(folder_selected)
 
+    def fetch_albums_ui():
+        # Update config with current token before fetching
+        config["api_key"] = token_var.get()
+        
+        albums = fetch_real_remote_albums()
+        
+        if not albums:
+            messagebox.showerror("Error", "Could not fetch albums. Check your Token.")
+            return
+
+        # Clear old list
+        for widget in list_frame_ref[0].winfo_children():
+            widget.destroy()
+            
+        album_vars.clear()
+        
+        for album in albums:
+            var = tk.BooleanVar(value=(album['title'] in current_selected))
+            album_vars[album['id']] = {"var": var, "title": album['title']}
+            chk = ttk.Checkbutton(list_frame_ref[0], text=f"{album['title']} ({album['items_count']})", variable=var)
+            chk.pack(anchor=tk.W, padx=10, pady=2)
+
     def save_settings():
-        # Collect selected albums
-        new_selection = [alb['title'] for alb in remote_albums if album_vars[alb['id']].get()]
+        new_selection = []
+        for aid, data in album_vars.items():
+            if data["var"].get():
+                new_selection.append(data["title"])
         
         config["local_folder"] = folder_var.get()
         config["auto_sync"] = auto_sync_var.get()
         config["selected_albums"] = new_selection
+        config["api_key"] = token_var.get()
         
         save_config()
-        messagebox.showinfo("Saved", f"Configuration updated.\nSyncing {len(new_selection)} albums to disk.")
+        messagebox.showinfo("Saved", f"Configuration updated.\nSelected {len(new_selection)} albums.")
         start_sync_thread()
         root.destroy()
 
     # Layout
-    frame = ttk.Frame(root, padding="20")
+    frame = ttk.Frame(root, padding="15")
     frame.pack(fill=tk.BOTH, expand=True)
 
-    # Header
-    ttk.Label(frame, text="Google Photos Sync", font=("Segoe UI", 16, "bold")).pack(pady=(0, 5))
-    ttk.Label(frame, text="Configure which cloud albums to download to this computer.", foreground="gray").pack(pady=(0, 20))
+    ttk.Label(frame, text="Gemini Photo Sync", font=("Segoe UI", 14, "bold")).pack(pady=(0, 5))
+
+    # Token Input
+    ttk.Label(frame, text="Google Access Token (From Web App Settings):", font=("Segoe UI", 9, "bold")).pack(anchor=tk.W)
+    ttk.Entry(frame, textvariable=token_var).pack(fill=tk.X, pady=(0, 10))
 
     # Folder Selection
-    ttk.Label(frame, text="Local Download Location:").pack(anchor=tk.W)
+    ttk.Label(frame, text="Local Download Folder:", font=("Segoe UI", 9, "bold")).pack(anchor=tk.W)
     f_frame = ttk.Frame(frame)
-    f_frame.pack(fill=tk.X, pady=(0, 20))
+    f_frame.pack(fill=tk.X, pady=(0, 10))
     ttk.Entry(f_frame, textvariable=folder_var).pack(side=tk.LEFT, fill=tk.X, expand=True)
     ttk.Button(f_frame, text="Browse...", command=browse_folder).pack(side=tk.RIGHT, padx=(5, 0))
 
     # Album List
-    ttk.Label(frame, text="Select Albums to Sync:", font=("Segoe UI", 10, "bold")).pack(anchor=tk.W)
+    ttk.Label(frame, text="Select Albums to Sync:", font=("Segoe UI", 9, "bold")).pack(anchor=tk.W)
+    ttk.Button(frame, text="Fetch Albums", command=fetch_albums_ui).pack(fill=tk.X, pady=(0,5))
     
-    list_frame = ttk.Frame(frame, borderwidth=1, relief="solid")
-    list_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+    list_container = ttk.Frame(frame, borderwidth=1, relief="solid")
+    list_container.pack(fill=tk.BOTH, expand=True, pady=5)
     
-    canvas = tk.Canvas(list_frame, bg="white")
-    scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=canvas.yview)
+    canvas = tk.Canvas(list_container, bg="white")
+    scrollbar = ttk.Scrollbar(list_container, orient="vertical", command=canvas.yview)
     scrollable_frame = ttk.Frame(canvas)
+    list_frame_ref[0] = scrollable_frame
 
     scrollable_frame.bind(
         "<Configure>",
@@ -188,21 +259,19 @@ def open_settings_window(icon, item):
     canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
     canvas.configure(yscrollcommand=scrollbar.set)
 
-    # Populate Albums
-    for album in remote_albums:
-        var = tk.BooleanVar(value=(album['title'] in current_selected))
-        album_vars[album['id']] = var
-        chk = ttk.Checkbutton(scrollable_frame, text=f"{album['title']} ({album['items_count']} items)", variable=var)
-        chk.pack(anchor=tk.W, padx=10, pady=2)
-
     canvas.pack(side="left", fill="both", expand=True)
     scrollbar.pack(side="right", fill="y")
+
+    # Initial Load if token exists
+    if config["api_key"]:
+        # Defer slightly to let UI render
+        root.after(500, fetch_albums_ui)
 
     # Options
     ttk.Checkbutton(frame, text="Enable Background Auto-Sync", variable=auto_sync_var).pack(anchor=tk.W, pady=10)
 
     # Save
-    ttk.Button(frame, text="Apply & Sync Now", command=save_settings).pack(fill=tk.X, pady=10)
+    ttk.Button(frame, text="Save & Sync Now", command=save_settings).pack(fill=tk.X, pady=5)
     
     root.mainloop()
 
@@ -212,7 +281,6 @@ def open_folder(icon, item):
     if folder and os.path.exists(folder):
         os.startfile(folder) if os.name == 'nt' else webbrowser.open(folder)
     else:
-        # Fallback if folder not set
         webbrowser.open(os.getcwd())
 
 def quit_app(icon, item):
@@ -224,7 +292,7 @@ def main():
     load_config()
     start_sync_thread()
 
-    # Create a nice icon
+    # Create icon
     image = Image.new('RGB', (64, 64), color=(33, 150, 243)) 
     d = ImageDraw.Draw(image)
     d.ellipse([16, 16, 48, 48], fill=(255, 255, 255))
